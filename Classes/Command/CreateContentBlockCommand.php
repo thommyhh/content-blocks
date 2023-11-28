@@ -27,9 +27,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use TYPO3\CMS\ContentBlocks\Builder\ContentBlockConfiguration;
 use TYPO3\CMS\ContentBlocks\Builder\ContentBlockSkeletonBuilder;
 use TYPO3\CMS\ContentBlocks\Definition\ContentType\ContentType;
+use TYPO3\CMS\ContentBlocks\Service\CreateContentType;
 use TYPO3\CMS\ContentBlocks\Registry\ContentBlockRegistry;
 use TYPO3\CMS\ContentBlocks\Service\PackageResolver;
-use TYPO3\CMS\ContentBlocks\Utility\ContentBlockPathUtility;
 use TYPO3\CMS\ContentBlocks\Validation\ContentBlockNameValidator;
 use TYPO3\CMS\ContentBlocks\Validation\PageTypeNameValidator;
 use TYPO3\CMS\Core\Core\Environment;
@@ -41,6 +41,7 @@ class CreateContentBlockCommand extends Command
         protected readonly ContentBlockSkeletonBuilder $contentBlockBuilder,
         protected readonly PackageResolver $packageResolver,
         protected readonly ContentBlockRegistry $contentBlockRegistry,
+        protected readonly CreateContentType $createContentType
     ) {
         parent::__construct();
     }
@@ -129,9 +130,18 @@ class CreateContentBlockCommand extends Command
         }
 
         $yamlConfiguration = match ($contentType) {
-            ContentType::CONTENT_ELEMENT => $this->createContentBlockContentElementConfiguration($vendor, $name, $type),
-            ContentType::PAGE_TYPE => $this->createContentBlockPageTypeConfiguration($vendor, $name, $type),
-            ContentType::RECORD_TYPE => $this->createContentBlockRecordTypeConfiguration($vendor, $name, $type),
+            ContentType::CONTENT_ELEMENT => $this->createContentType->createContentBlockContentElementConfiguration(
+                $vendor,
+                $name,
+                [
+                    [
+                        'identifier' => 'header',
+                        'useExistingField' => true,
+                    ],
+                ]
+            ),
+            ContentType::PAGE_TYPE => $this->createContentType->createContentBlockPageTypeConfiguration($vendor, $name, $type),
+            ContentType::RECORD_TYPE => $this->createContentType->createContentBlockRecordTypeConfiguration($vendor, $name, $type),
         };
 
         if ($input->getOption('extension')) {
@@ -148,7 +158,7 @@ class CreateContentBlockCommand extends Command
 
         $contentBlockConfiguration = new ContentBlockConfiguration(
             yamlConfig: $yamlConfiguration,
-            basePath: $this->getBasePath($availablePackages, $extension, $contentType),
+            basePath: $this->createContentType->getBasePath($availablePackages, $extension, $contentType),
             contentType: $contentType
         );
 
@@ -197,66 +207,5 @@ class CreateContentBlockCommand extends Command
     protected function getSupportedTypes(): array
     {
         return ['content-element' => 'Content Element', 'page-type' => 'Page Type', 'record-type' => 'Record Type'];
-    }
-
-    protected function getBasePath(array $availablePackages, string $extension, ContentType $contentType): string
-    {
-        return match ($contentType) {
-            ContentType::CONTENT_ELEMENT => $availablePackages[$extension]->getPackagePath() . ContentBlockPathUtility::getRelativeContentElementsPath(),
-            ContentType::PAGE_TYPE => $availablePackages[$extension]->getPackagePath() . ContentBlockPathUtility::getRelativePageTypesPath(),
-            ContentType::RECORD_TYPE => $availablePackages[$extension]->getPackagePath() . ContentBlockPathUtility::getRelativeRecordTypesPath()
-        };
-    }
-
-    private function createContentBlockContentElementConfiguration(string $vendor, string $name, ?string $type = ''): array
-    {
-        $configuration = [
-            'name' => $vendor . '/' . $name,
-            'group' => 'common',
-            'prefixFields' => true,
-            'prefixType' => 'full',
-        ];
-        if ($type !== '' && $type !== null) {
-            $configuration['typeName'] = $type;
-        }
-        $configuration['fields'] = [
-            [
-                'identifier' => 'header',
-                'useExistingField' => true,
-            ],
-        ];
-        return $configuration;
-    }
-
-    private function createContentBlockPageTypeConfiguration(string $vendor, string $name, int $type): array
-    {
-        return [
-            'name' => $vendor . '/' . $name,
-            'typeName' => $type,
-            'prefixFields' => true,
-            'prefixType' => 'full',
-        ];
-    }
-
-    private function createContentBlockRecordTypeConfiguration(string $vendor, string $name, ?string $type = ''): array
-    {
-        $vendorWithoutSeparator = str_replace('-', '', $vendor);
-        $nameWithoutSeparator = str_replace('-', '', $name);
-        $configuration = [
-            'name' => $vendor . '/' . $name,
-            'table' => 'tx_' . $vendorWithoutSeparator . '_domain_model_' . $nameWithoutSeparator,
-            'prefixFields' => false,
-            'labelField' => 'title',
-        ];
-        if ($type !== '' && $type !== null) {
-            $configuration['typeName'] = $type;
-        }
-        $configuration['fields'] = [
-            [
-                'identifier' => 'title',
-                'type' => 'Text',
-            ],
-        ];
-        return $configuration;
     }
 }
