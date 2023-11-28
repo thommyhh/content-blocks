@@ -30,7 +30,7 @@ class CreateContentType
         string $name,
         array $fields,
         array $basics = [],
-        $group = 'common',
+        string $group = 'common',
         bool $prefixFields = true,
         string $prefixType = 'full',
         string $table = 'tt_content',
@@ -42,14 +42,21 @@ class CreateContentType
             'group' => $group,
             'prefixFields' => $prefixFields,
             'prefixType' => $prefixType,
-            'table' => $table,
-            'typeField' => $typeField,
-            'basics' => $basics,
-            'fields' => $fields,
         ];
+        if(count($basics) > 0) {
+            $configuration['basics'] = $basics;
+        }
+        if ($table !== 'tt_content') {
+            $configuration['table'] = $table;
+        }
+        if ($typeField !== 'CType') {
+            $configuration['typeField'] = $typeField;
+        }
         if ($type !== '' && $type !== null) {
             $configuration['typeName'] = $type;
         }
+        $configuration['fields'] = $fields;
+
         return $configuration;
     }
 
