@@ -17,6 +17,8 @@ declare(strict_types=1);
 
 namespace TYPO3\CMS\ContentBlocks\Definition;
 
+use TYPO3\CMS\ContentBlocks\Definition\TCA\LinebreakDefinition;
+
 /**
  * @internal Not part of TYPO3's public API.
  */
@@ -28,8 +30,8 @@ final class PaletteDefinition
     private string $description = '';
     private string $languagePathLabel = '';
     private string $languagePathDescription = '';
-    /** @var string[] */
-    private array $fieldIdentifiers = [];
+    /** @var array<string|LinebreakDefinition> */
+    private array $items = [];
 
     public static function createFromArray(array $array): PaletteDefinition
     {
@@ -43,7 +45,7 @@ final class PaletteDefinition
         $self->description = (string)($array['description'] ?? '');
         $self->languagePathLabel = (string)($array['languagePathLabel'] ?? '');
         $self->languagePathDescription = (string)($array['languagePathDescription'] ?? '');
-        $self->fieldIdentifiers = (array)($array['fieldIdentifiers'] ?? []);
+        $self->items = (array)($array['items'] ?? []);
         return $self;
     }
 
@@ -72,10 +74,12 @@ final class PaletteDefinition
         return $this->description !== '';
     }
 
-    public function getShowItem(): string
+    /**
+     * @return array<string|LinebreakDefinition>
+     */
+    public function getItems(): array
     {
-        $showItem = implode(',', $this->fieldIdentifiers);
-        return $showItem;
+        return $this->items;
     }
 
     public function getLanguagePathLabel(): string

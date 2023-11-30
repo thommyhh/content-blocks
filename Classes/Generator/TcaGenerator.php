@@ -23,18 +23,21 @@ use TYPO3\CMS\ContentBlocks\Definition\Capability\RootLevelType;
 use TYPO3\CMS\ContentBlocks\Definition\ContentType\ContentType;
 use TYPO3\CMS\ContentBlocks\Definition\ContentType\ContentTypeInterface;
 use TYPO3\CMS\ContentBlocks\Definition\PaletteDefinition;
-use TYPO3\CMS\ContentBlocks\Definition\TabDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TableDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TableDefinitionCollection;
+use TYPO3\CMS\ContentBlocks\Definition\TCA\LinebreakDefinition;
+use TYPO3\CMS\ContentBlocks\Definition\TCA\TabDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TcaFieldDefinition;
 use TYPO3\CMS\ContentBlocks\FieldConfiguration\FieldType;
 use TYPO3\CMS\ContentBlocks\FieldConfiguration\FlexFormFieldConfiguration;
 use TYPO3\CMS\ContentBlocks\Registry\LanguageFileRegistry;
 use TYPO3\CMS\ContentBlocks\Service\SystemExtensionAvailability;
 use TYPO3\CMS\Core\Configuration\Event\AfterTcaCompilationEvent;
-use TYPO3\CMS\Core\Preparations\TcaPreparation; // @todo changed namespace in v13
+use TYPO3\CMS\Core\Preparations\TcaPreparation;
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+
+// @todo changed namespace in v13
 
 /**
  * @internal Not part of TYPO3's public API.
@@ -187,7 +190,7 @@ class TcaGenerator
     protected function generatePalettesTcaSingle(PaletteDefinition $paletteDefinition): array
     {
         $paletteTca = [
-            'showitem' => $paletteDefinition->getShowItem(),
+            'showitem' => $this->generatePaletteShowItem($paletteDefinition),
         ];
         if ($this->languageFileRegistry->isset($paletteDefinition->getContentBlockName(), $paletteDefinition->getLanguagePathLabel())) {
             $paletteTca['label'] = $paletteDefinition->getLanguagePathLabel();
@@ -200,6 +203,20 @@ class TcaGenerator
             $paletteTca['description'] = $paletteDefinition->getDescription();
         }
         return $paletteTca;
+    }
+
+    protected function generatePaletteShowItem(PaletteDefinition $paletteDefinition): string
+    {
+        $showItem = [];
+        foreach ($paletteDefinition->getItems() as $fieldIdentifier) {
+            if ($fieldIdentifier instanceof LinebreakDefinition) {
+                $showItem[] = '--linebreak--';
+            } else {
+                $showItem[] = $fieldIdentifier;
+            }
+        }
+        $showItemString = implode(',', $showItem);
+        return $showItemString;
     }
 
     protected function fillTypeFieldSelectItems(): void
@@ -222,10 +239,11 @@ class TcaGenerator
                         position: 'after:default',
                     );
                 }
-                // @todo hard-coded "default" group for pages. Make target group configurable.
                 $group = match ($tableDefinition->getContentType()) {
                     ContentType::CONTENT_ELEMENT => 'content_blocks',
+                    // @todo hard-coded "default" group for pages. Make target group configurable.
                     ContentType::PAGE_TYPE => 'default',
+                    // @todo Type select grouping is not possible right now for Record Types.
                     ContentType::RECORD_TYPE => '',
                 };
                 $label = $typeDefinition->getLanguagePathTitle();
@@ -682,7 +700,7 @@ class TcaGenerator
         $ctrl = [
             'title' => $title,
             'label' => $this->resolveLabelField($tableDefinition),
-            'hideTable' => !$tableDefinition->isRootTable() || !$tableDefinition->isAggregateRoot(),
+            'hideTable' => !$tableDefinition->isAggregateRoot(),
             'enablecolumns' => $capability->buildRestrictionsTca(),
         ];
 
@@ -889,7 +907,8 @@ class TcaGenerator
             ];
         }
 
-        if (!$tableDefinition->isRootTable() || !$tableDefinition->isAggregateRoot()) {
+        // This is a child table and can only be created by the parent.
+        if (!$tableDefinition->isAggregateRoot()) {
             $columns['foreign_table_parent_uid'] = [
                 'config' => [
                     'type' => 'passthrough',

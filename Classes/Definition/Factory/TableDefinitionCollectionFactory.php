@@ -30,9 +30,10 @@ use TYPO3\CMS\ContentBlocks\Definition\FlexForm\FlexFormDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\FlexForm\SectionDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\FlexForm\SheetDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\PaletteDefinition;
-use TYPO3\CMS\ContentBlocks\Definition\TabDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TableDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TableDefinitionCollection;
+use TYPO3\CMS\ContentBlocks\Definition\TCA\LinebreakDefinition;
+use TYPO3\CMS\ContentBlocks\Definition\TCA\TabDefinition;
 use TYPO3\CMS\ContentBlocks\Definition\TcaFieldDefinition;
 use TYPO3\CMS\ContentBlocks\FieldConfiguration\FieldType;
 use TYPO3\CMS\ContentBlocks\Loader\LoadedContentBlock;
@@ -179,12 +180,14 @@ final class TableDefinitionCollectionFactory
         $result->contentType->typeName = $input->getTypeName();
         $result->contentType->table = $input->table;
         if ($input->isRootTable()) {
-            $result->contentType->languagePathTitle = $input->languagePath->getCurrentPath() . 'title';
-            $result->contentType->languagePathDescription = $input->languagePath->getCurrentPath() . 'description';
+            $languagePathTitle = 'title';
+            $languagePathDescription = 'description';
         } else {
-            $result->contentType->languagePathTitle = $input->languagePath->getCurrentPath() . '.label';
-            $result->contentType->languagePathDescription = $input->languagePath->getCurrentPath() . '.description';
+            $languagePathTitle = '.label';
+            $languagePathDescription = '.description';
         }
+        $result->contentType->languagePathTitle = $input->languagePath->getCurrentPath() . $languagePathTitle;
+        $result->contentType->languagePathDescription = $input->languagePath->getCurrentPath() . $languagePathDescription;
 
         $result->tableDefinition->typeField = $input->getTypeField();
         $result->tableDefinition->isRootTable = $input->isRootTable();
@@ -243,16 +246,16 @@ final class TableDefinitionCollectionFactory
             return [];
         }
         $fields = [];
-        $paletteFieldIdentifiers = [];
+        $paletteItems = [];
         foreach ($rootPalette['fields'] as $paletteField) {
             $paletteFieldType = $this->resolveType($paletteField, $input->table, $input);
             if ($paletteFieldType === FieldType::LINEBREAK) {
-                $paletteFieldIdentifiers[] = '--linebreak--';
+                $paletteItems[] = new LinebreakDefinition();
             } else {
                 $this->assertNoPaletteInPalette($paletteFieldType, $paletteField['identifier'], $rootPalette['identifier'], $input->contentBlock);
                 $this->assertNoTabInPalette($paletteFieldType, $paletteField['identifier'], $rootPalette['identifier'], $input->contentBlock);
                 $fields[] = $paletteField;
-                $paletteFieldIdentifiers[] = $this->chooseIdentifier($input, $paletteField);
+                $paletteItems[] = $this->chooseIdentifier($input, $paletteField);
             }
         }
         $input->languagePath->addPathSegment('palettes.' . $rootPalette['identifier']);
@@ -268,7 +271,7 @@ final class TableDefinitionCollectionFactory
             'description' => $description,
             'languagePathLabel' => $languagePathLabel,
             'languagePathDescription' => $languagePathDescription,
-            'fieldIdentifiers' => $paletteFieldIdentifiers,
+            'items' => $paletteItems,
         ];
         $result->tableDefinition->palettes[$paletteIdentifier] = $palette;
         $result->contentType->showItems[] = PaletteDefinition::createFromArray($palette);
@@ -538,7 +541,6 @@ final class TableDefinitionCollectionFactory
         $tableDefinition['palettes'] = $processedTableDefinition->palettes;
         $tableDefinition['fields'] = $processedTableDefinition->fields;
         $tableDefinition['typeField'] = $processedTableDefinition->typeField;
-        $tableDefinition['isRootTable'] = $processedTableDefinition->isRootTable;
         $tableDefinition['raw'] = $processedTableDefinition->raw;
         $tableDefinition['contentType'] = $processedTableDefinition->contentType;
         if ($processedTableDefinition->isRootTable) {
@@ -556,9 +558,11 @@ final class TableDefinitionCollectionFactory
      */
     private function createInputArrayForTypeDefinition(ProcessedContentType $processedContentType, ProcessingInput $input): array
     {
-        [$vendor, $package] = explode('/', $processedContentType->contentBlock->getName());
+        $contentBlock = $processedContentType->contentBlock;
+        $vendor = $contentBlock->getVendor();
+        $package = $contentBlock->getPackage();
         $contentType = [
-            'identifier' => $processedContentType->contentBlock->getName(),
+            'identifier' => $contentBlock->getName(),
             'columns' => $processedContentType->columns,
             'showItems' => $processedContentType->showItems,
             'overrideColumns' => $processedContentType->overrideColumns,
@@ -570,15 +574,15 @@ final class TableDefinitionCollectionFactory
         ];
         if ($input->isRootTable()) {
             $contentTypeIcon = new ContentTypeIcon();
-            $contentTypeIcon->iconPath = $processedContentType->contentBlock->getIcon();
-            $contentTypeIcon->iconProvider = $processedContentType->contentBlock->getIconProvider();
-            $contentType['priority'] = (int)($processedContentType->contentBlock->getYaml()['priority'] ?? 0);
+            $contentTypeIcon->iconPath = $contentBlock->getIcon();
+            $contentTypeIcon->iconProvider = $contentBlock->getIconProvider();
+            $contentType['priority'] = (int)($contentBlock->getYaml()['priority'] ?? 0);
         } else {
-            $absolutePath = GeneralUtility::getFileAbsFileName($processedContentType->contentBlock->getExtPath());
+            $absolutePath = GeneralUtility::getFileAbsFileName($contentBlock->getExtPath());
             $contentTypeIcon = ContentTypeIconResolver::resolve(
-                $processedContentType->contentBlock->getName(),
+                $contentBlock->getName(),
                 $absolutePath,
-                $processedContentType->contentBlock->getExtPath(),
+                $contentBlock->getExtPath(),
                 $input->yaml['identifier'],
                 $input->contentType,
             );
@@ -586,8 +590,8 @@ final class TableDefinitionCollectionFactory
         $contentType['typeIconPath'] = $contentTypeIcon->iconPath;
         $contentType['iconProvider'] = $contentTypeIcon->iconProvider;
         $contentType['typeIconIdentifier'] = $this->buildTypeIconIdentifier($processedContentType, $contentTypeIcon);
-        if ($processedContentType->contentBlock->getContentType() === ContentType::CONTENT_ELEMENT) {
-            $contentType['wizardGroup'] = $processedContentType->contentBlock->getYaml()['group'] ?? 'common';
+        if ($contentBlock->getContentType() === ContentType::CONTENT_ELEMENT) {
+            $contentType['group'] = $contentBlock->getYaml()['group'] ?? $contentBlock->getContentType()->getDefaultGroup();
         }
         return $contentType;
     }

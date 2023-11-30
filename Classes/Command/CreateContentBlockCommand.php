@@ -48,17 +48,42 @@ class CreateContentBlockCommand extends Command
 
     public function configure(): void
     {
-        $this->addOption('content-type', '', InputOption::VALUE_OPTIONAL, 'Content type of content block. One of: ' . implode(', ', array_keys($this->getSupportedTypes())) . '.');
-        $this->addOption('vendor', '', InputOption::VALUE_OPTIONAL, 'Vendor of content block (The name must be lowercase and consist of words separated by dashes "-").');
-        $this->addOption('name', '', InputOption::VALUE_OPTIONAL, 'Name of content block (The name must be lowercase and consist of words separated by dashes "-").');
-        $this->addOption('type', '', InputOption::VALUE_OPTIONAL, 'Type identifier of content block. Falls back to combination of "vendor" and "name". Must be integer value for content type "page-type".');
-        $this->addOption('extension', '', InputOption::VALUE_OPTIONAL, 'Host extension in which the content block should be stored.');
+        $this->addOption(
+            'content-type',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Content type of Content Block. One of: ' . implode(', ', array_keys($this->getSupportedTypes())) . '.'
+        );
+        $this->addOption(
+            'vendor',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Vendor of Content Block (The name must be lowercase and consist of words separated by dashes "-").'
+        );
+        $this->addOption(
+            'name',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Name of Content Block (The name must be lowercase and consist of words separated by dashes "-").'
+        );
+        $this->addOption(
+            'type-name',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Type identifier of Content Block. Falls back to combination of "vendor" and "name". Must be integer value for content type "page-type".'
+        );
+        $this->addOption(
+            'extension',
+            '',
+            InputOption::VALUE_OPTIONAL,
+            'Host extension in which the Content Block should be stored.'
+        );
     }
 
     public function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $type = $input->getOption('type');
+        $typeName = $input->getOption('type-name');
         $availablePackages = $this->packageResolver->getAvailablePackages();
         if ($availablePackages === []) {
             throw new \RuntimeException('No packages were found in which to store the content block.', 1678699706);
@@ -111,17 +136,16 @@ class CreateContentBlockCommand extends Command
         }
         $name = strtolower($name);
         if ($contentType === ContentType::PAGE_TYPE) {
-            if ($input->getOption('type')) {
-                $type = $input->getOption('type');
-            } else {
+            if ($typeName === null) {
                 $currentTimeStamp = time();
-                $type = $io->askQuestion(new Question('Enter a unique integer type. Press enter for current timestamp "' . $currentTimeStamp . '"'));
-                if ($type === null) {
-                    $type = $currentTimeStamp;
+                $whatIsTheTypeName = new Question('Enter a unique integer type. Press enter for current timestamp "' . $currentTimeStamp . '"');
+                $typeName = $io->askQuestion($whatIsTheTypeName);
+                if ($typeName === null) {
+                    $typeName = $currentTimeStamp;
                 }
             }
-            PageTypeNameValidator::validate($type, $vendor . '/' . $name);
-            $type = (int)$type;
+            PageTypeNameValidator::validate($typeName, $vendor . '/' . $name);
+            $typeName = (int)$typeName;
         }
 
         $contentBlockName = $vendor . '/' . $name;
@@ -144,8 +168,8 @@ class CreateContentBlockCommand extends Command
                     ],
                 ]
             ),
-            ContentType::PAGE_TYPE => $this->createContentType->createContentBlockPageTypeConfiguration($vendor, $name, $type),
-            ContentType::RECORD_TYPE => $this->createContentType->createContentBlockRecordTypeConfiguration($vendor, $name, $type),
+            ContentType::PAGE_TYPE => $this->createContentType->createContentBlockPageTypeConfiguration($vendor, $name, $typeName),
+            ContentType::RECORD_TYPE => $this->createContentType->createContentBlockRecordTypeConfiguration($vendor, $name, $typeName),
         };
 
         if ($input->getOption('extension')) {
@@ -169,8 +193,8 @@ class CreateContentBlockCommand extends Command
         $this->contentBlockBuilder->create($contentBlockConfiguration);
 
         $output->writeln('<info>Successfully created new Content Block "' . $vendor . '/' . $name . '" inside ' . $extension . '.</info>');
-        $output->writeln('<question>Please run the following commands now and every time you change the EditorInterface.yaml file:</question>');
-        $output->writeln('<question>(Or flush the system cache in the backend and run the Database Analyzer)</question>');
+        $output->writeln('<comment>Please run the following commands now and every time you change the EditorInterface.yaml file.</comment>');
+        $output->writeln('<comment>Alternatively, flush the system cache in the backend and run the Database Analyzer.</comment>');
 
         $command = Environment::isComposerMode() ? 'vendor/bin/typo3' : 'typo3/sysext/core/bin/typo3';
         $output->writeln($command . ' cache:flush -g system');
