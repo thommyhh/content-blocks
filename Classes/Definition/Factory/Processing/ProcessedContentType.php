@@ -79,7 +79,16 @@ final class ProcessedContentType
         $contentType['iconProvider'] = $contentTypeIcon->iconProvider;
         $contentType['typeIconIdentifier'] = $this->buildTypeIconIdentifier($contentTypeIcon);
         if ($this->contentBlock->getContentType() === ContentType::CONTENT_ELEMENT) {
-            $contentType['group'] = $this->contentBlock->getYaml()['group'] ?? $this->contentBlock->getContentType()->getDefaultGroup();
+            $group = $this->contentBlock->getYaml()['group'] ?? '';
+            if ($group !== '') {
+                $contentType['group'] = $group;
+            } else {
+                if ($this->contentBlock->isPlugin()) {
+                    $contentType['group'] = 'plugins';
+                } else {
+                    $contentType['group'] = $this->contentBlock->getContentType()->getDefaultGroup();
+                }
+            }
         }
         return $contentType;
     }

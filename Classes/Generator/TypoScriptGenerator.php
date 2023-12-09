@@ -48,12 +48,21 @@ class TypoScriptGenerator
 
     protected function generate(ContentTypeInterface $typeDefinition): string
     {
-        $privatePath = $this->contentBlockRegistry->getContentBlockExtPath($typeDefinition->getName()) . '/' . ContentBlockPathUtility::getPrivateFolder();
-        $template = ContentBlockPathUtility::getFrontendTemplateFileNameWithoutExtension();
+        $contentBlock = $this->contentBlockRegistry->getContentBlock($typeDefinition->getName());
+        $privatePath = $contentBlock->getExtPath() . '/' . ContentBlockPathUtility::getPrivateFolder();
 
+        if ($contentBlock->isPlugin()) {
+            return $this->getTemplateForPlugin($typeDefinition->getTypeName(), $contentBlock->getHostExtension());
+        }
+        return $this->getTemplateForContentElement($typeDefinition->getTypeName(), $privatePath);
+    }
+
+    protected function getTemplateForContentElement(string $typeName, string $privatePath): string
+    {
+        $template = ContentBlockPathUtility::getFrontendTemplateFileNameWithoutExtension();
         return <<<HEREDOC
-tt_content.{$typeDefinition->getTypeName()} =< lib.contentBlock
-tt_content.{$typeDefinition->getTypeName()} {
+tt_content.$typeName =< lib.contentBlock
+tt_content.$typeName {
     templateName = {$template}
     templateRootPaths {
         20 = $privatePath/
@@ -66,5 +75,28 @@ tt_content.{$typeDefinition->getTypeName()} {
     }
 }
 HEREDOC;
+    }
+
+    protected function getTemplateForPlugin(string $typeName, string $extensionName): string
+    {
+        $extensionName = $this->convertExtensionName($extensionName);
+        return <<<HEREDOC
+tt_content.$typeName =< lib.contentBlock
+tt_content.$typeName {
+    template = TEXT
+    template.value = <f:cObject typoscriptObjectPath="tt_content.$typeName.20" data="{data}" table="tt_content" />
+    20 = EXTBASEPLUGIN
+    20 {
+        extensionName = $extensionName
+        pluginName = $typeName
+    }
+}
+HEREDOC;
+    }
+
+    protected function convertExtensionName(string $extensionName): string
+    {
+        $extensionName = str_replace(' ', '', ucwords(str_replace('_', ' ', $extensionName)));
+        return $extensionName;
     }
 }
